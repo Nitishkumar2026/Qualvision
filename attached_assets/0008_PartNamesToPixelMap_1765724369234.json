@@ -1,0 +1,159 @@
+{
+	"0008_00.bmp": [
+		{
+			"NodeId": 1000060,
+			"Name": "small_washer_2",
+			"StencilValue": 1
+		},
+		{
+			"NodeId": 1000058,
+			"Name": "small_washer_1",
+			"StencilValue": 2
+		},
+		{
+			"NodeId": 1000055,
+			"Name": "large_washer_5",
+			"StencilValue": 3
+		},
+		{
+			"NodeId": 1000053,
+			"Name": "large_washer_4",
+			"StencilValue": 4
+		},
+		{
+			"NodeId": 1000051,
+			"Name": "large_washer_3",
+			"StencilValue": 5
+		},
+		{
+			"NodeId": 1000049,
+			"Name": "large_washer_2",
+			"StencilValue": 6
+		},
+		{
+			"NodeId": 1000047,
+			"Name": "large_washer_1",
+			"StencilValue": 7
+		},
+		{
+			"NodeId": 1000044,
+			"Name": "M10_nuts_5",
+			"StencilValue": 8
+		},
+		{
+			"NodeId": 1000042,
+			"Name": "M10_nuts_4",
+			"StencilValue": 9
+		},
+		{
+			"NodeId": 1000040,
+			"Name": "M10_nuts_3",
+			"StencilValue": 10
+		},
+		{
+			"NodeId": 1000038,
+			"Name": "M10_nuts_2",
+			"StencilValue": 11
+		},
+		{
+			"NodeId": 1000036,
+			"Name": "M10_nuts_1",
+			"StencilValue": 12
+		},
+		{
+			"NodeId": 1000033,
+			"Name": "M8_nuts_6",
+			"StencilValue": 13
+		},
+		{
+			"NodeId": 1000031,
+			"Name": "M8_nuts_5",
+			"StencilValue": 14
+		},
+		{
+			"NodeId": 1000029,
+			"Name": "M8_nuts_4",
+			"StencilValue": 15
+		},
+		{
+			"NodeId": 1000027,
+			"Name": "M8_nuts_3",
+			"StencilValue": 16
+		},
+		{
+			"NodeId": 1000024,
+			"Name": "M8_nuts_1",
+			"StencilValue": 17
+		},
+		{
+			"NodeId": 1000021,
+			"Name": "M10_bolt_5",
+			"StencilValue": 18
+		},
+		{
+			"NodeId": 1000019,
+			"Name": "M10_bolt_4",
+			"StencilValue": 19
+		},
+		{
+			"NodeId": 1000017,
+			"Name": "M10_bolt_3",
+			"StencilValue": 20
+		},
+		{
+			"NodeId": 1000015,
+			"Name": "M10_bolt_2",
+			"StencilValue": 21
+		},
+		{
+			"NodeId": 1000013,
+			"Name": "M10_bolt_1",
+			"StencilValue": 22
+		},
+		{
+			"NodeId": 1000010,
+			"Name": "M8_bolt_6",
+			"StencilValue": 23
+		},
+		{
+			"NodeId": 1000008,
+			"Name": "M8_bolt_5",
+			"StencilValue": 24
+		},
+		{
+			"NodeId": 1000006,
+			"Name": "M8_bolt_4",
+			"StencilValue": 25
+		},
+		{
+			"NodeId": 1000004,
+			"Name": "M8_bolt_3",
+			"StencilValue": 26
+		},
+		{
+			"NodeId": 1000002,
+			"Name": "M8_bolt_2",
+			"StencilValue": 27
+		},
+		{
+			"NodeId": 1000000,
+			"Name": "M8_bolt_1",
+			"StencilValue": 28
+		},
+		{
+			"NodeId": 1000064,
+			"Name": "side_cover",
+			"StencilValue": 29
+		},
+		{
+			"NodeId": 1000067,
+			"Name": "box",
+			"StencilValue": 30
+		},
+		{
+			"NodeId": 1000070,
+			"Name": "slanted_plate",
+			"StencilValue": 31
+		}
+	]
+}
