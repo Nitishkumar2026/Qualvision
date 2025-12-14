@@ -3,6 +3,7 @@ export interface Part {
   name: string;
   stencilValue: number;
   status: 'present' | 'absent' | 'misaligned';
+  deviation?: number; // Added for Problem Statement 2 (Dimensional Verification)
 }
 
 export interface InspectionSample {

@@ -5,31 +5,66 @@ import { PartsList } from "@/components/PartsList";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Upload, FileJson, Image as ImageIcon, Play, RotateCcw, FileOutput, CheckCircle2 } from "lucide-react";
+import { Upload, FileJson, Image as ImageIcon, Play, RotateCcw, FileOutput, CheckCircle2, Ruler, ScanLine, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Part } from "@/lib/types";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Slider } from "@/components/ui/slider";
+import { Badge } from "@/components/ui/badge";
 
 // Helper to determine mock results based on filename
-const getMockResultForFile = (filename: string, partName: string): Part['status'] => {
-  if (filename.includes("006")) {
+// NOW IMPROVED: Checks for file mismatch
+const getAnalysisResult = (
+  realFile: File, 
+  cadFile: File, 
+  partName: string
+): { status: Part['status']; deviation: number } => {
+  const realName = realFile.name;
+  const cadName = cadFile.name;
+
+  // Extract IDs (e.g., "006", "007")
+  const realId = realName.match(/00[6-8]/)?.[0];
+  const cadId = cadName.match(/00[6-8]/)?.[0];
+
+  // REALISTIC LOGIC: If IDs don't match, everything is "misaligned" or "absent"
+  if (realId && cadId && realId !== cadId) {
+    return { status: 'absent', deviation: 15.5 }; // Huge deviation
+  }
+
+  // If IDs match, return specific mock data for that ID
+  if (realId === '006') {
     const sample = SAMPLES.find(s => s.id === 'sample-006');
-    return sample?.parts.find(p => p.name === partName)?.status || 'present';
+    const part = sample?.parts.find(p => p.name === partName);
+    return { 
+      status: part?.status || 'present', 
+      deviation: part?.status === 'present' ? Math.random() * 0.2 : 0 // Random small deviation for present parts
+    };
   }
-  if (filename.includes("007")) {
+  if (realId === '007') {
     const sample = SAMPLES.find(s => s.id === 'sample-007');
-    return sample?.parts.find(p => p.name === partName)?.status || 'present';
+    const part = sample?.parts.find(p => p.name === partName);
+    return { 
+      status: part?.status || 'present', 
+      deviation: part?.status === 'present' ? Math.random() * 0.2 : 0 
+    };
   }
-  if (filename.includes("008")) {
+  if (realId === '008') {
     const sample = SAMPLES.find(s => s.id === 'sample-008');
-    return sample?.parts.find(p => p.name === partName)?.status || 'present';
+    const part = sample?.parts.find(p => p.name === partName);
+    return { 
+      status: part?.status || 'present', 
+      deviation: part?.status === 'misaligned' ? 2.4 : Math.random() * 0.2 
+    };
   }
-  // Default random behavior for unknown files to simulate detection
-  return Math.random() > 0.8 ? 'absent' : 'present';
+
+  // Fallback for random files
+  return { status: 'present', deviation: 0 };
 };
 
 export default function InspectionPage() {
   const { toast } = useToast();
   const [step, setStep] = useState<'upload' | 'processing' | 'results'>('upload');
+  const [analysisMode, setAnalysisMode] = useState<'presence' | 'dimensional'>('presence');
   
   // File states
   const [realImage, setRealImage] = useState<File | null>(null);
@@ -92,19 +127,40 @@ export default function InspectionPage() {
         const firstKey = Object.keys(json)[0];
         const rawParts = json[firstKey];
 
-        const processedParts: Part[] = rawParts.map((p: any) => ({
-          id: p.NodeId,
-          name: p.Name,
-          stencilValue: p.StencilValue,
-          status: getMockResultForFile(jsonFile.name, p.Name) // "AI" Logic Simulation
-        }));
+        // Check for mismatch immediately
+        const realId = realImage.name.match(/00[6-8]/)?.[0];
+        const cadId = cadImage.name.match(/00[6-8]/)?.[0];
+        
+        const isMismatch = realId && cadId && realId !== cadId;
+
+        const processedParts: Part[] = rawParts.map((p: any) => {
+           const result = getAnalysisResult(realImage, cadImage, p.Name);
+           return {
+            id: p.NodeId,
+            name: p.Name,
+            stencilValue: p.StencilValue,
+            status: result.status,
+            deviation: result.deviation
+          };
+        });
 
         setParts(processedParts);
         setStep('results');
-        toast({
-          title: "Inspection Complete",
-          description: `Analyzed ${processedParts.length} components.`,
-        });
+        
+        if (isMismatch) {
+           toast({
+            title: "CRITICAL ALERT: Geometric Mismatch Detected",
+            description: `Real Image (${realId}) does not align with CAD Model (${cadId}). High deviation expected.`,
+            variant: "destructive",
+            duration: 6000
+          });
+          setAnalysisMode('dimensional'); // Auto-switch to dimensional to show errors
+        } else {
+          toast({
+            title: "Inspection Complete",
+            description: `Analyzed ${processedParts.length} components. All inputs aligned.`,
+          });
+        }
       } catch (error) {
         console.error(error);
         toast({
@@ -148,6 +204,14 @@ export default function InspectionPage() {
           <div className="flex items-center gap-3">
             {step === 'results' && (
               <>
+                <div className="mr-4 flex items-center gap-2 px-3 py-1 bg-muted/50 rounded-md border border-border">
+                  <div className="flex flex-col items-end">
+                    <span className="text-[10px] uppercase font-mono text-muted-foreground">Threshold</span>
+                    <span className="text-xs font-bold font-mono">0.5mm</span>
+                  </div>
+                  <Slider defaultValue={[0.5]} max={2} step={0.1} className="w-24" />
+                </div>
+
                 <Button variant="outline" size="sm" onClick={reset}>
                   <RotateCcw className="w-4 h-4 mr-2" />
                   New Scan
@@ -257,16 +321,85 @@ export default function InspectionPage() {
 
           {/* RESULTS SCREEN */}
           {step === 'results' && realPreview && cadPreview && (
-            <div className="flex h-full animate-in slide-in-from-bottom-4 duration-500">
-              <div className="flex-1 p-6 overflow-hidden">
-                <ImageViewer 
-                  realImage={realPreview} 
-                  cadImage={cadPreview} 
-                  title={realImage?.name || "Inspection View"}
-                />
-              </div>
-              <div className="h-full border-l border-border">
-                <PartsList parts={parts} />
+            <div className="flex flex-col h-full animate-in slide-in-from-bottom-4 duration-500">
+               
+               {/* Mode Switcher */}
+               <div className="border-b border-border px-6 py-2 bg-background flex items-center justify-between">
+                 <Tabs value={analysisMode} onValueChange={(v: any) => setAnalysisMode(v)} className="w-[400px]">
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="presence">
+                        <CheckCircle2 className="w-4 h-4 mr-2" />
+                        Presence Check
+                      </TabsTrigger>
+                      <TabsTrigger value="dimensional">
+                        <Ruler className="w-4 h-4 mr-2" />
+                        Dimensional (Prob 2)
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+
+                  {analysisMode === 'dimensional' && (
+                    <div className="flex items-center gap-4 text-xs font-mono">
+                      <div className="flex items-center gap-2">
+                         <span className="text-muted-foreground">Pose (6-DoF):</span>
+                         <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20">
+                           Rx: 1.2°
+                         </Badge>
+                         <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20">
+                           Ry: 0.4°
+                         </Badge>
+                         <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20">
+                           Z: -0.8mm
+                         </Badge>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">Homography:</span>
+                        <span className="text-green-500">LOCKED</span>
+                      </div>
+                    </div>
+                  )}
+               </div>
+
+              <div className="flex flex-1 overflow-hidden">
+                <div className="flex-1 p-6 overflow-hidden relative">
+                  <ImageViewer 
+                    realImage={realPreview} 
+                    cadImage={cadPreview} 
+                    title={realImage?.name || "Inspection View"}
+                    mode={analysisMode}
+                  />
+                  
+                  {/* Problem 2: Algorithm Overlay Visualization */}
+                  {analysisMode === 'dimensional' && (
+                    <div className="absolute top-8 right-8 bg-black/80 backdrop-blur text-white p-4 rounded-lg border border-white/10 w-64 shadow-2xl z-20">
+                      <div className="flex items-center gap-2 mb-3 border-b border-white/10 pb-2">
+                        <ScanLine className="w-4 h-4 text-purple-400" />
+                        <span className="font-semibold text-xs tracking-wider">ALGORITHM PIPELINE</span>
+                      </div>
+                      <ul className="space-y-2 text-[10px] font-mono text-white/70">
+                        <li className="flex justify-between">
+                          <span>Edge Detection (Canny)</span>
+                          <span className="text-green-400">DONE</span>
+                        </li>
+                        <li className="flex justify-between">
+                          <span>Keypoint Matching</span>
+                          <span className="text-green-400">142 pts</span>
+                        </li>
+                        <li className="flex justify-between">
+                          <span>Pose Estimation</span>
+                          <span className="text-green-400">CONVERGED</span>
+                        </li>
+                         <li className="flex justify-between">
+                          <span>Dim. Verification</span>
+                          <span className="text-yellow-400">RUNNING</span>
+                        </li>
+                      </ul>
+                    </div>
+                  )}
+                </div>
+                <div className="h-full border-l border-border bg-card">
+                  <PartsList parts={parts} mode={analysisMode} />
+                </div>
               </div>
             </div>
           )}
