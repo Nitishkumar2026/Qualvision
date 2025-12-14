@@ -1,0 +1,172 @@
+Bahut achha question 👍
+Ab tum **developer nahi**, balki **end user / client / quality engineer** ke point of view se soch rahe ho — ye interview + assignment dono ke liye **bahut strong point** hota hai.
+
+Main tumhe **step-by-step user journey** + **real-life usage flow** samjhaata hoon.
+
+---
+
+# 👤 USER IS SYSTEM KO KAISE USE KAREGA?
+
+Assume karo user hai:
+
+* **Quality Engineer**
+* **Manufacturing Inspector**
+* **Production Supervisor**
+
+---
+
+## 🔹 USER KA GOAL
+
+> “Mujhe pata karna hai ki jo physical part bana hai, wo CAD design ke according hai ya nahi.”
+
+---
+
+# 🧭 USER FLOW (START → END)
+
+---
+
+## 🟢 STEP 1: User system open karega
+
+User:
+
+* Desktop application / Web dashboard / Internal tool open karega
+
+Screen pe options:
+
+* 📤 Upload Real Image
+* 📤 Upload CAD Image
+* 📤 Upload Mask
+* 📤 Upload JSON
+
+---
+
+## 🟢 STEP 2: User data upload karega
+
+User:
+
+1. Camera / system se **Real Image upload**
+2. CAD system se **CAD Image upload**
+3. CAD team se mila **Mask upload**
+4. **JSON file upload** (parts mapping)
+
+👉 User ko **technical cheeze samajhne ki zarurat nahi**
+Sirf files select karni hain.
+
+---
+
+## 🟢 STEP 3: User “Run Inspection” button dabayega
+
+System background me automatically:
+
+* Images read karega
+* Mask se parts extract karega
+* CAD vs Real comparison karega
+* Missing parts detect karega
+
+⏱️ Time: few seconds
+
+---
+
+## 🟢 STEP 4: System user ko visual result dikhayega
+
+### 🖼️ Screen 1: CAD Image View
+
+* 🟢 Green = Part present in real
+* 🔴 Red = Part missing in real
+
+---
+
+### 🖼️ Screen 2: Real Image View
+
+* 🟢 Green box = Detected part
+* ❌ Red label = Missing part
+
+---
+
+### 📋 Screen 3: Summary Table
+
+| Part Name | Status    |
+| --------- | --------- |
+| Bolt      | ✅ Present |
+| Nut       | ❌ Missing |
+| Bracket   | ✅ Present |
+
+---
+
+## 🟢 STEP 5: User decision lega
+
+Based on report:
+
+* ✅ **PASS** → Part factory se aage bhej do
+* ❌ **FAIL** → Reject / rework / alert
+
+---
+
+## 🟢 STEP 6: Report download karega
+
+User:
+
+* 📄 PDF report
+* 🖼️ Annotated images
+* 📊 CSV summary
+
+👉 Ye report:
+
+* Audit
+* Client
+* Management
+
+ke kaam aata hai.
+
+---
+
+# 🔹 REAL-LIFE INDUSTRY USE CASE
+
+### Factory me kaise chalega?
+
+1. Operator part ki photo lega
+2. System me upload karega
+3. System bolega:
+
+   > “2 parts missing – Reject”
+4. Time bachega, human error kam hoga
+
+---
+
+# 🔹 USER KO KYA NAHI KARNA PADEGA?
+
+❌ Mask banana
+❌ Pixel values samajhna
+❌ Code likhna
+❌ CAD open karna
+
+Sab backend me ho jaayega.
+
+---
+
+# 🔹 FUTURE VERSION (Problem Statement 2 ke baad)
+
+User ko extra info milegi:
+
+| Check Type  | Output        |
+| ----------- | ------------- |
+| Location    | ⚠️ Misaligned |
+| Size        | ❌ Oversized   |
+| Orientation | ⚠️ Rotated    |
+
+---
+
+# 🧠 Interview Ready 2–3 Lines (VERY IMPORTANT)
+
+> “The system is designed for non-technical quality inspectors. Users simply upload the real image, CAD image, mask, and mapping file, and the system automatically highlights missing, misaligned, or incorrect parts with a clear visual and tabular report.”
+
+---
+
+## Agar tum chaho to next mai:
+
+* 🧩 **UI wireframe (screen-by-screen)**
+* 🧩 **User story (Agile format)**
+* 🧩 **Use case diagram**
+* 🧩 **How to explain this to non-tech manager**
+
+bhi bana deta hoon 😊
