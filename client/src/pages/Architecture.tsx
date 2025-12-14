@@ -94,44 +94,37 @@ export default function ArchitecturePage() {
                 To verify location and dimensions, we propose a 6-DoF Pose Estimation pipeline.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
-                <div>
-                  <h4 className="font-semibold mb-2 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                    Feature Extraction
-                  </h4>
-                  <p className="text-muted-foreground">
-                    Using edge detection (Canny) and keypoint extraction to find component boundaries in the real image.
-                  </p>
-                </div>
-                <div>
-                   <h4 className="font-semibold mb-2 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                    Projective Transformation
-                  </h4>
-                  <p className="text-muted-foreground">
-                    Rendering the CAD model using a virtual camera with identical intrinsics to the physical camera.
-                  </p>
-                </div>
-                <div>
-                   <h4 className="font-semibold mb-2 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                    Dimensional Verification
-                  </h4>
-                  <p className="text-muted-foreground">
-                    Calculating the homography matrix to map pixel distances to physical units (mm). Comparing centroid distances.
-                  </p>
-                </div>
-                <div>
-                   <h4 className="font-semibold mb-2 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                    Thresholding
-                  </h4>
-                  <p className="text-muted-foreground">
-                    Defining tolerance limits (e.g., ±0.5mm) for Pass/Fail criteria based on manufacturing specs.
-                  </p>
-                </div>
+            <CardContent className="space-y-6">
+              <div className="relative">
+                 {/* Connecting Line */}
+                 <div className="absolute left-[19px] top-6 bottom-6 w-0.5 bg-border z-0 hidden md:block" />
+                 
+                 <div className="space-y-6 relative z-10">
+                    <PipelineStep 
+                      number="1"
+                      title="Feature Extraction"
+                      description="Using edge detection (Canny) and keypoint extraction to find component boundaries in the real image."
+                      tech="OpenCV Canny / SIFT"
+                    />
+                    <PipelineStep 
+                      number="2"
+                      title="Projective Transformation"
+                      description="Rendering the CAD model using a virtual camera with identical intrinsics to the physical camera."
+                      tech="OpenGL / PnP Solver"
+                    />
+                    <PipelineStep 
+                      number="3"
+                      title="Dimensional Verification"
+                      description="Calculating the homography matrix to map pixel distances to physical units (mm). Comparing centroid distances."
+                      tech="Homography Matrix"
+                    />
+                    <PipelineStep 
+                      number="4"
+                      title="Thresholding"
+                      description="Defining tolerance limits (e.g., ±0.5mm) for Pass/Fail criteria based on manufacturing specs."
+                      tech="Statistical Analysis"
+                    />
+                 </div>
               </div>
             </CardContent>
           </Card>
@@ -140,6 +133,23 @@ export default function ArchitecturePage() {
       </div>
     </DashboardLayout>
   );
+}
+
+function PipelineStep({ number, title, description, tech }: any) {
+  return (
+    <div className="flex gap-4 items-start bg-card p-4 rounded-lg border border-border shadow-sm relative">
+       <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg shadow-md ring-4 ring-background">
+         {number}
+       </div>
+       <div>
+         <div className="flex items-center gap-2 mb-1">
+           <h4 className="font-semibold text-lg">{title}</h4>
+           <Badge variant="secondary" className="text-[10px] h-5">{tech}</Badge>
+         </div>
+         <p className="text-muted-foreground text-sm">{description}</p>
+       </div>
+    </div>
+  )
 }
 
 function FeatureCard({ icon: Icon, title, description }: any) {

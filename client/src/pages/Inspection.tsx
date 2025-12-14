@@ -438,26 +438,29 @@ export default function InspectionPage() {
                     <div className="absolute top-8 right-8 bg-black/80 backdrop-blur text-white p-4 rounded-lg border border-white/10 w-64 shadow-2xl z-20">
                       <div className="flex items-center gap-2 mb-3 border-b border-white/10 pb-2">
                         <ScanLine className="w-4 h-4 text-purple-400" />
-                        <span className="font-semibold text-xs tracking-wider">ALGORITHM PIPELINE</span>
+                        <span className="font-semibold text-xs tracking-wider">6-DoF PIPELINE</span>
                       </div>
                       <ul className="space-y-2 text-[10px] font-mono text-white/70">
-                        <li className="flex justify-between">
-                          <span>Edge Detection (Canny)</span>
-                          <span className="text-green-400">DONE</span>
+                        <li className="flex justify-between items-center">
+                          <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"/>Feature Extraction</span>
+                          <span className="text-green-400 font-bold">DONE</span>
                         </li>
-                        <li className="flex justify-between">
-                          <span>Keypoint Matching</span>
-                          <span className="text-green-400">142 pts</span>
+                        <li className="flex justify-between items-center">
+                          <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"/>Proj. Transformation</span>
+                          <span className="text-green-400 font-bold">MATCHED</span>
                         </li>
-                        <li className="flex justify-between">
-                          <span>Pose Estimation</span>
-                          <span className="text-green-400">CONVERGED</span>
+                        <li className="flex justify-between items-center">
+                          <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"/>Dim. Verification</span>
+                          <span className="text-green-400 font-bold">CALC</span>
                         </li>
-                         <li className="flex justify-between">
-                          <span>Dim. Verification</span>
-                          <span className="text-yellow-400">RUNNING</span>
+                         <li className="flex justify-between items-center">
+                          <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"/>Thresholding</span>
+                          <span className="text-yellow-400 font-bold">RUNNING</span>
                         </li>
                       </ul>
+                      <div className="mt-3 pt-2 border-t border-white/10 text-[9px] text-white/50 font-mono text-center">
+                        Method: Canny Edge + PnP Solver
+                      </div>
                     </div>
                   )}
                 </div>
