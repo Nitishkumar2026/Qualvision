@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { SAMPLES } from "@/data/mockData";
 import { ImageViewer } from "@/components/ImageViewer";
 import { PartsList } from "@/components/PartsList";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -13,62 +12,6 @@ import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-
-// Helper to determine mock results based on filename
-// NOW GENERIC: Works for any file upload by generating plausible data
-const getAnalysisResult = (
-  realFile: File, 
-  cadFile: File, 
-  partName: string
-): { status: Part['status']; deviation: number } => {
-  const realName = realFile.name;
-  const cadName = cadFile.name;
-
-  // Extract IDs (e.g., "006", "007") if they exist
-  const realId = realName.match(/00[0-9]/)?.[0];
-  const cadId = cadName.match(/00[0-9]/)?.[0];
-
-  // LOGIC 1: Mismatch Detection
-  // If both have IDs but they are different -> FAIL
-  if (realId && cadId && realId !== cadId) {
-    return { status: 'absent', deviation: 15.5 + Math.random() * 5 }; // Massive deviation
-  }
-
-  // LOGIC 2: Random Deterministic Generation for Unknown Files
-  // This ensures that if you upload "New_Component_X", it generates data that feels "real" 
-  // and stays consistent for that part name, rather than being purely random every time.
-  
-  // Simple hash function for the part name
-  let hash = 0;
-  for (let i = 0; i < partName.length; i++) {
-    hash = partName.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  
-  // Normalize to 0-1
-  const seed = Math.abs(Math.sin(hash));
-
-  // 85% Chance of being Present (Normal case)
-  if (seed > 0.15) {
-     return { 
-       status: 'present', 
-       deviation: (seed * 0.4) // Random deviation between 0.0 - 0.4mm (Acceptable)
-     };
-  } 
-  // 10% Chance of Misalignment
-  else if (seed > 0.05) {
-     return { 
-       status: 'misaligned', 
-       deviation: 0.6 + (seed * 2) // Deviation > 0.5mm (Fail)
-     };
-  }
-  // 5% Chance of Missing
-  else {
-     return { 
-       status: 'absent', 
-       deviation: 0 
-     };
-  }
-};
 
 export default function InspectionPage() {
   const { toast } = useToast();
@@ -125,61 +68,62 @@ export default function InspectionPage() {
 
     setStep('processing');
 
-    // Simulate Python backend processing time
-    setTimeout(async () => {
-      try {
-        const text = await jsonFile.text();
-        const json = JSON.parse(text);
-        
-        // The JSON structure from the user is like: { "filename.bmp": [ { NodeId, Name, StencilValue } ] }
-        // We need to extract the array regardless of the key
-        const firstKey = Object.keys(json)[0];
-        const rawParts = json[firstKey];
+    try {
+      const formData = new FormData();
+      formData.append('realImage', realImage);
+      formData.append('cadImage', cadImage);
+      formData.append('maskImage', maskImage);
+      formData.append('jsonFile', jsonFile);
 
-        // Check for mismatch immediately
-        const realId = realImage.name.match(/00[6-8]/)?.[0];
-        const cadId = cadImage.name.match(/00[6-8]/)?.[0];
-        
-        const isMismatch = realId && cadId && realId !== cadId;
+      const response = await fetch('/api/inspections', {
+        method: 'POST',
+        body: formData,
+      });
 
-        const processedParts: Part[] = rawParts.map((p: any) => {
-           const result = getAnalysisResult(realImage, cadImage, p.Name);
-           return {
-            id: p.NodeId,
-            name: p.Name,
-            stencilValue: p.StencilValue,
-            status: result.status,
-            deviation: result.deviation
-          };
-        });
-
-        setParts(processedParts);
-        setStep('results');
-        
-        if (isMismatch) {
-           toast({
-            title: "CRITICAL ALERT: Geometric Mismatch Detected",
-            description: `Real Image (${realId}) does not align with CAD Model (${cadId}). High deviation expected.`,
-            variant: "destructive",
-            duration: 6000
-          });
-          setAnalysisMode('dimensional'); // Auto-switch to dimensional to show errors
-        } else {
-          toast({
-            title: "Inspection Complete",
-            description: `Analyzed ${processedParts.length} components. All inputs aligned.`,
-          });
-        }
-      } catch (error) {
-        console.error(error);
-        toast({
-          title: "Error Parsing JSON",
-          description: "The JSON file format is invalid.",
-          variant: "destructive",
-        });
-        setStep('upload');
+      if (!response.ok) {
+        throw new Error('Failed to process inspection');
       }
-    }, 2500); // 2.5s simulated delay
+
+      const inspection = await response.json();
+      
+      const processedParts: Part[] = inspection.parts.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        stencilValue: p.stencilValue,
+        status: p.status,
+        deviation: p.deviation
+      }));
+
+      setParts(processedParts);
+      setStep('results');
+
+      const realId = realImage.name.match(/00[6-8]/)?.[0];
+      const cadId = cadImage.name.match(/00[6-8]/)?.[0];
+      const isMismatch = realId && cadId && realId !== cadId;
+      
+      if (isMismatch) {
+        toast({
+          title: "CRITICAL ALERT: Geometric Mismatch Detected",
+          description: `Real Image (${realId}) does not align with CAD Model (${cadId}). High deviation expected.`,
+          variant: "destructive",
+          duration: 6000
+        });
+        setAnalysisMode('dimensional');
+      } else {
+        toast({
+          title: "Inspection Complete",
+          description: `Analyzed ${inspection.partsAnalyzed} components. ${inspection.partsPassed} passed, ${inspection.partsFailed} failed.`,
+        });
+      }
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Error Processing Inspection",
+        description: "Failed to analyze the uploaded files. Please try again.",
+        variant: "destructive",
+      });
+      setStep('upload');
+    }
   };
 
   const generatePDF = () => {
