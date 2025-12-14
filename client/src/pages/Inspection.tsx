@@ -11,9 +11,11 @@ import { Part } from "@/lib/types";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // Helper to determine mock results based on filename
-// NOW IMPROVED: Checks for file mismatch
+// NOW GENERIC: Works for any file upload by generating plausible data
 const getAnalysisResult = (
   realFile: File, 
   cadFile: File, 
@@ -22,43 +24,50 @@ const getAnalysisResult = (
   const realName = realFile.name;
   const cadName = cadFile.name;
 
-  // Extract IDs (e.g., "006", "007")
-  const realId = realName.match(/00[6-8]/)?.[0];
-  const cadId = cadName.match(/00[6-8]/)?.[0];
+  // Extract IDs (e.g., "006", "007") if they exist
+  const realId = realName.match(/00[0-9]/)?.[0];
+  const cadId = cadName.match(/00[0-9]/)?.[0];
 
-  // REALISTIC LOGIC: If IDs don't match, everything is "misaligned" or "absent"
+  // LOGIC 1: Mismatch Detection
+  // If both have IDs but they are different -> FAIL
   if (realId && cadId && realId !== cadId) {
-    return { status: 'absent', deviation: 15.5 }; // Huge deviation
+    return { status: 'absent', deviation: 15.5 + Math.random() * 5 }; // Massive deviation
   }
 
-  // If IDs match, return specific mock data for that ID
-  if (realId === '006') {
-    const sample = SAMPLES.find(s => s.id === 'sample-006');
-    const part = sample?.parts.find(p => p.name === partName);
-    return { 
-      status: part?.status || 'present', 
-      deviation: part?.status === 'present' ? Math.random() * 0.2 : 0 // Random small deviation for present parts
-    };
+  // LOGIC 2: Random Deterministic Generation for Unknown Files
+  // This ensures that if you upload "New_Component_X", it generates data that feels "real" 
+  // and stays consistent for that part name, rather than being purely random every time.
+  
+  // Simple hash function for the part name
+  let hash = 0;
+  for (let i = 0; i < partName.length; i++) {
+    hash = partName.charCodeAt(i) + ((hash << 5) - hash);
   }
-  if (realId === '007') {
-    const sample = SAMPLES.find(s => s.id === 'sample-007');
-    const part = sample?.parts.find(p => p.name === partName);
-    return { 
-      status: part?.status || 'present', 
-      deviation: part?.status === 'present' ? Math.random() * 0.2 : 0 
-    };
-  }
-  if (realId === '008') {
-    const sample = SAMPLES.find(s => s.id === 'sample-008');
-    const part = sample?.parts.find(p => p.name === partName);
-    return { 
-      status: part?.status || 'present', 
-      deviation: part?.status === 'misaligned' ? 2.4 : Math.random() * 0.2 
-    };
-  }
+  
+  // Normalize to 0-1
+  const seed = Math.abs(Math.sin(hash));
 
-  // Fallback for random files
-  return { status: 'present', deviation: 0 };
+  // 85% Chance of being Present (Normal case)
+  if (seed > 0.15) {
+     return { 
+       status: 'present', 
+       deviation: (seed * 0.4) // Random deviation between 0.0 - 0.4mm (Acceptable)
+     };
+  } 
+  // 10% Chance of Misalignment
+  else if (seed > 0.05) {
+     return { 
+       status: 'misaligned', 
+       deviation: 0.6 + (seed * 2) // Deviation > 0.5mm (Fail)
+     };
+  }
+  // 5% Chance of Missing
+  else {
+     return { 
+       status: 'absent', 
+       deviation: 0 
+     };
+  }
 };
 
 export default function InspectionPage() {
@@ -173,6 +182,61 @@ export default function InspectionPage() {
     }, 2500); // 2.5s simulated delay
   };
 
+  const generatePDF = () => {
+    if (!parts.length || !realImage) return;
+
+    const doc = new jsPDF();
+    
+    // Header
+    doc.setFontSize(20);
+    doc.text("Inspection Report", 14, 22);
+    
+    doc.setFontSize(10);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 30);
+    doc.text(`Source File: ${realImage.name}`, 14, 35);
+    
+    // Summary Stats
+    const total = parts.length;
+    const failed = parts.filter(p => p.status !== 'present').length;
+    const passed = total - failed;
+    
+    doc.text(`Total Parts: ${total}`, 14, 45);
+    doc.setTextColor(0, 150, 0);
+    doc.text(`Passed: ${passed}`, 60, 45);
+    doc.setTextColor(200, 0, 0);
+    doc.text(`Issues: ${failed}`, 100, 45);
+    doc.setTextColor(0, 0, 0);
+
+    // Table
+    autoTable(doc, {
+      startY: 55,
+      head: [['Part ID', 'Name', 'Status', 'Deviation (mm)']],
+      body: parts.map(p => [
+        p.id,
+        p.name,
+        p.status.toUpperCase(),
+        p.deviation ? p.deviation.toFixed(3) : '0.000'
+      ]),
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [40, 40, 50] },
+      didParseCell: function(data) {
+        if (data.section === 'body' && data.column.index === 2) {
+           const status = data.cell.raw as string;
+           if (status === 'ABSENT') data.cell.styles.textColor = [200, 0, 0];
+           if (status === 'MISALIGNED') data.cell.styles.textColor = [200, 150, 0];
+           if (status === 'PRESENT') data.cell.styles.textColor = [0, 150, 0];
+        }
+      }
+    });
+
+    doc.save(`inspection_report_${Date.now()}.pdf`);
+    
+    toast({
+      title: "Report Downloaded",
+      description: "PDF report has been saved to your device.",
+    });
+  };
+
   const reset = () => {
     setStep('upload');
     setRealImage(null);
@@ -216,7 +280,7 @@ export default function InspectionPage() {
                   <RotateCcw className="w-4 h-4 mr-2" />
                   New Scan
                 </Button>
-                <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white">
+                <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={generatePDF}>
                   <FileOutput className="w-4 h-4 mr-2" />
                   Download Report
                 </Button>
