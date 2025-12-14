@@ -1,38 +1,50 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
-
-// modify the interface with any CRUD methods
-// you might need
+import { type User, type InsertUser, type Inspection, type InsertInspection, inspections } from "@shared/schema";
+import { db } from "./db";
+import { desc, eq } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  createInspection(inspection: InsertInspection): Promise<Inspection>;
+  getInspectionHistory(limit?: number): Promise<Inspection[]>;
+  getInspection(id: string): Promise<Inspection | undefined>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
-  }
-
+export class DatabaseStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+    return undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    return undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+    throw new Error("Not implemented");
+  }
+
+  async createInspection(inspection: InsertInspection): Promise<Inspection> {
+    const [result] = await db.insert(inspections).values(inspection).returning();
+    return result;
+  }
+
+  async getInspectionHistory(limit: number = 50): Promise<Inspection[]> {
+    return await db
+      .select()
+      .from(inspections)
+      .orderBy(desc(inspections.createdAt))
+      .limit(limit);
+  }
+
+  async getInspection(id: string): Promise<Inspection | undefined> {
+    const [result] = await db
+      .select()
+      .from(inspections)
+      .where(eq(inspections.id, id))
+      .limit(1);
+    return result;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
