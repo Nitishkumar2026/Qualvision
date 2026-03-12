@@ -13,7 +13,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden font-sans">
       {/* Sidebar */}
-      <aside className="w-64 border-r border-border bg-sidebar flex flex-col">
+      <aside className="hidden md:flex w-64 border-r border-border bg-sidebar flex-col">
         <div className="p-6 border-b border-border/10">
           <div className="flex items-center gap-2 font-mono text-primary font-bold text-lg tracking-tighter">
             <Box className="w-6 h-6" />
@@ -50,6 +50,28 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
+        <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-card">
+          <div className="flex items-center gap-2 font-mono text-primary font-bold">
+            <Box className="w-5 h-5" />
+            <span>QUAL_VISION</span>
+          </div>
+          <div className="flex items-center gap-3">
+            {navItems.map((item) => (
+              <Link key={item.href} href={item.href}>
+                <div
+                  className={cn(
+                    "px-2 py-1 text-xs rounded-md",
+                    location === item.href
+                      ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                      : "text-muted-foreground border border-border"
+                  )}
+                >
+                  {item.label}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
         <div className="absolute inset-0 bg-grid-white/[0.02] pointer-events-none" />
         {children}
       </main>

@@ -4,20 +4,21 @@ import { PartsList } from "@/components/PartsList";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Upload, FileJson, Image as ImageIcon, Play, RotateCcw, FileOutput, CheckCircle2, Ruler, ScanLine, AlertTriangle } from "lucide-react";
+import { Upload, FileJson, Image as ImageIcon, Play, RotateCcw, FileOutput, CheckCircle2, Ruler, ScanLine, AlertTriangle, Activity, Layers } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Part } from "@/lib/types";
+import { Part, PoseMetrics } from "@/lib/types";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { LiveAnalysisOverlay } from "@/components/LiveAnalysisOverlay";
 
 export default function InspectionPage() {
   const { toast } = useToast();
   const [step, setStep] = useState<'upload' | 'processing' | 'results'>('upload');
   const [analysisMode, setAnalysisMode] = useState<'presence' | 'dimensional'>('presence');
-  
+
   // File states
   const [realImage, setRealImage] = useState<File | null>(null);
   const [cadImage, setCadImage] = useState<File | null>(null);
@@ -30,12 +31,56 @@ export default function InspectionPage() {
 
   // Parsed Data
   const [parts, setParts] = useState<Part[]>([]);
+  const [pose, setPose] = useState<PoseMetrics | null>(null);
+
+  // Live Analysis States
+  const [liveStep, setLiveStep] = useState<string>("");
+  const [liveMessage, setLiveMessage] = useState<string>("");
+  const [showLiveOverlay, setShowLiveOverlay] = useState(false);
+  const [hoveredPartId, setHoveredPartId] = useState<number | null>(null);
 
   // Cleanup object URLs to avoid memory leaks
+  // Note: Commented out to ensure URLs persist for results view
+  // useEffect(() => {
+  //   return () => {
+  //     if (realPreview) URL.revokeObjectURL(realPreview);
+  //     if (cadPreview) URL.revokeObjectURL(cadPreview);
+  //   };
+  // }, [realPreview, cadPreview]);
+
+  // WebSocket Connection for Live Updates
   useEffect(() => {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    let socket: WebSocket | null = null;
+    let reconnectTimeout: any = null;
+
+    const connect = () => {
+      try {
+        socket = new WebSocket(wsUrl);
+        socket.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === "progress") {
+              setLiveStep(data.step);
+              setLiveMessage(data.message);
+            }
+          } catch (e) {
+            console.error("WS parse error", e);
+          }
+        };
+        socket.onclose = () => {
+          reconnectTimeout = setTimeout(connect, 3000);
+        };
+      } catch (e) {
+        console.error("WS connection error", e);
+      }
+    };
+
+    connect();
     return () => {
-      if (realPreview) URL.revokeObjectURL(realPreview);
-      if (cadPreview) URL.revokeObjectURL(cadPreview);
+      if (socket) socket.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
   }, []);
 
@@ -81,26 +126,34 @@ export default function InspectionPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to process inspection');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to process inspection');
       }
 
       const inspection = await response.json();
-      
+
       const processedParts: Part[] = inspection.parts.map((p: any) => ({
         id: p.id,
         name: p.name,
         stencilValue: p.stencilValue,
         status: p.status,
-        deviation: p.deviation
+        deviation: p.deviation,
+        x: p.x,
+        y: p.y,
+        x_cad: p.x_cad,
+        y_cad: p.y_cad,
+        x_real: p.x_real,
+        y_real: p.y_real
       }));
 
       setParts(processedParts);
+      setPose(inspection.pose ?? null);
       setStep('results');
 
       const realId = realImage.name.match(/00[6-8]/)?.[0];
       const cadId = cadImage.name.match(/00[6-8]/)?.[0];
       const isMismatch = realId && cadId && realId !== cadId;
-      
+
       if (isMismatch) {
         toast({
           title: "CRITICAL ALERT: Geometric Mismatch Detected",
@@ -115,11 +168,11 @@ export default function InspectionPage() {
           description: `Analyzed ${inspection.partsAnalyzed} components. ${inspection.partsPassed} passed, ${inspection.partsFailed} failed.`,
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
       toast({
         title: "Error Processing Inspection",
-        description: "Failed to analyze the uploaded files. Please try again.",
+        description: error.message || "Failed to analyze the uploaded files. Please try again.",
         variant: "destructive",
       });
       setStep('upload');
@@ -130,20 +183,20 @@ export default function InspectionPage() {
     if (!parts.length || !realImage) return;
 
     const doc = new jsPDF();
-    
+
     // Header
     doc.setFontSize(20);
     doc.text("Inspection Report", 14, 22);
-    
+
     doc.setFontSize(10);
     doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 30);
     doc.text(`Source File: ${realImage.name}`, 14, 35);
-    
+
     // Summary Stats
     const total = parts.length;
     const failed = parts.filter(p => p.status !== 'present').length;
     const passed = total - failed;
-    
+
     doc.text(`Total Parts: ${total}`, 14, 45);
     doc.setTextColor(0, 150, 0);
     doc.text(`Passed: ${passed}`, 60, 45);
@@ -163,18 +216,19 @@ export default function InspectionPage() {
       ]),
       styles: { fontSize: 8 },
       headStyles: { fillColor: [40, 40, 50] },
-      didParseCell: function(data) {
+      didParseCell: function (data) {
         if (data.section === 'body' && data.column.index === 2) {
-           const status = data.cell.raw as string;
-           if (status === 'ABSENT') data.cell.styles.textColor = [200, 0, 0];
-           if (status === 'MISALIGNED') data.cell.styles.textColor = [200, 150, 0];
-           if (status === 'PRESENT') data.cell.styles.textColor = [0, 150, 0];
+          const status = data.cell.raw as string;
+          if (status === 'ABSENT') data.cell.styles.textColor = [200, 0, 0];
+          if (status === 'MISALIGNED') data.cell.styles.textColor = [200, 150, 0];
+          if (status === 'PRESENT') data.cell.styles.textColor = [0, 150, 0];
+          if (status === 'UNKNOWN') data.cell.styles.textColor = [200, 150, 0];
         }
       }
     });
 
     doc.save(`inspection_report_${Date.now()}.pdf`);
-    
+
     toast({
       title: "Report Downloaded",
       description: "PDF report has been saved to your device.",
@@ -195,7 +249,7 @@ export default function InspectionPage() {
   return (
     <DashboardLayout>
       <div className="flex flex-col h-full bg-background">
-        
+
         {/* Header - Changes based on step */}
         <header className="h-16 border-b border-border bg-card/50 backdrop-blur-sm flex items-center justify-between px-6 shrink-0 z-10">
           <div>
@@ -203,12 +257,12 @@ export default function InspectionPage() {
               {step === 'results' ? 'Inspection Report' : 'New Inspection Task'}
             </h1>
             <p className="text-xs text-muted-foreground">
-              {step === 'results' 
-                ? `Analysis Result for ${realImage?.name}` 
+              {step === 'results'
+                ? `Analysis Result for ${realImage?.name}`
                 : 'Upload component data to verify against CAD model'}
             </p>
           </div>
-          
+
           <div className="flex items-center gap-3">
             {step === 'results' && (
               <>
@@ -235,12 +289,12 @@ export default function InspectionPage() {
 
         {/* Content Area */}
         <div className="flex-1 overflow-hidden relative">
-          
+
           {/* UPLOAD SCREEN */}
           {step === 'upload' && (
             <div className="h-full overflow-y-auto p-8 flex flex-col items-center justify-center animate-in fade-in zoom-in-95 duration-300">
               <div className="max-w-2xl w-full space-y-8">
-                
+
                 <div className="text-center space-y-2 mb-8">
                   <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4 text-primary">
                     <Upload className="w-8 h-8" />
@@ -252,45 +306,62 @@ export default function InspectionPage() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <UploadCard 
-                    label="Real Image" 
-                    accept="image/*" 
-                    icon={ImageIcon} 
-                    file={realImage} 
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleFileChange(e, 'real')} 
+                  <UploadCard
+                    label="Real Image"
+                    accept="image/*"
+                    icon={ImageIcon}
+                    file={realImage}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleFileChange(e, 'real')}
                   />
-                  <UploadCard 
-                    label="CAD Model Image" 
-                    accept="image/*" 
-                    icon={Layers} 
-                    file={cadImage} 
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleFileChange(e, 'cad')} 
+                  <UploadCard
+                    label="CAD Model Image"
+                    accept="image/*"
+                    icon={Layers}
+                    file={cadImage}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleFileChange(e, 'cad')}
                   />
-                  <UploadCard 
-                    label="Segmentation Mask" 
-                    accept="image/*" 
-                    icon={Layers} 
-                    file={maskImage} 
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleFileChange(e, 'mask')} 
+                  <UploadCard
+                    label="Segmentation Mask"
+                    accept="image/*"
+                    icon={Layers}
+                    file={maskImage}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleFileChange(e, 'mask')}
                   />
-                  <UploadCard 
-                    label="Parts Map JSON" 
-                    accept=".json" 
-                    icon={FileJson} 
-                    file={jsonFile} 
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleFileChange(e, 'json')} 
+                  <UploadCard
+                    label="Parts Map JSON"
+                    accept=".json"
+                    icon={FileJson}
+                    file={jsonFile}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleFileChange(e, 'json')}
                   />
                 </div>
 
-                <div className="pt-8 flex justify-center">
-                  <Button 
-                    size="lg" 
-                    className="w-full md:w-auto min-w-[200px] text-base" 
+                <div className="pt-8 flex flex-col md:flex-row justify-center gap-4">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="w-full md:w-auto min-w-[200px] text-base border-primary/20 hover:bg-primary/5"
                     onClick={runInspection}
                     disabled={!realImage || !cadImage || !maskImage || !jsonFile}
                   >
                     <Play className="w-5 h-5 mr-2" />
-                    Run Inspection
+                    Standard Run
+                  </Button>
+
+                  <Button
+                    size="lg"
+                    className="w-full md:w-auto min-w-[240px] text-base bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20"
+                    onClick={() => {
+                      setShowLiveOverlay(true);
+                      runInspection().finally(() => {
+                        // Keep overlay briefly for "complete" state if needed, but handled by setStep
+                        setTimeout(() => setShowLiveOverlay(false), 2000);
+                      });
+                    }}
+                    disabled={!realImage || !cadImage || !maskImage || !jsonFile}
+                  >
+                    <Activity className="w-5 h-5 mr-2" />
+                    Live Tech-Track Analysis
                   </Button>
                 </div>
 
@@ -312,7 +383,7 @@ export default function InspectionPage() {
               <p className="text-muted-foreground max-w-sm mx-auto">
                 Running computer vision algorithms to detect parts, verify presence, and check alignment.
               </p>
-              
+
               <div className="mt-8 space-y-2 text-sm text-left max-w-xs mx-auto font-mono text-muted-foreground/70">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-3 h-3 text-green-500" /> Loaded 4 files
@@ -330,92 +401,103 @@ export default function InspectionPage() {
           {/* RESULTS SCREEN */}
           {step === 'results' && realPreview && cadPreview && (
             <div className="flex flex-col h-full animate-in slide-in-from-bottom-4 duration-500">
-               
-               {/* Mode Switcher */}
-               <div className="border-b border-border px-6 py-2 bg-background flex items-center justify-between">
-                 <Tabs value={analysisMode} onValueChange={(v: any) => setAnalysisMode(v)} className="w-[400px]">
-                    <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="presence">
-                        <CheckCircle2 className="w-4 h-4 mr-2" />
-                        Presence Check
-                      </TabsTrigger>
-                      <TabsTrigger value="dimensional">
-                        <Ruler className="w-4 h-4 mr-2" />
-                        Dimensional (Prob 2)
-                      </TabsTrigger>
-                    </TabsList>
-                  </Tabs>
 
-                  {analysisMode === 'dimensional' && (
-                    <div className="flex items-center gap-4 text-xs font-mono">
-                      <div className="flex items-center gap-2">
-                         <span className="text-muted-foreground">Pose (6-DoF):</span>
-                         <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20">
-                           Rx: 1.2°
-                         </Badge>
-                         <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20">
-                           Ry: 0.4°
-                         </Badge>
-                         <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20">
-                           Z: -0.8mm
-                         </Badge>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">Homography:</span>
-                        <span className="text-green-500">LOCKED</span>
-                      </div>
+              {/* Mode Switcher */}
+              <div className="border-b border-border px-6 py-2 bg-background flex items-center justify-between">
+                <Tabs value={analysisMode} onValueChange={(v: any) => setAnalysisMode(v)} className="w-full md:w-[400px]">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="presence">
+                      <CheckCircle2 className="w-4 h-4 mr-2" />
+                      Presence Check
+                    </TabsTrigger>
+                    <TabsTrigger value="dimensional">
+                      <Ruler className="w-4 h-4 mr-2" />
+                      Dimensional (Prob 2)
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+
+                {analysisMode === 'dimensional' && (
+                  <div className="flex items-center gap-4 text-xs font-mono">
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">Analysis Metrics:</span>
+                      <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20">
+                        ORB Features: Active
+                      </Badge>
+                      <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20">
+                        SSIM: Enabled
+                      </Badge>
+                      <Badge variant="outline" className="bg-purple-500/10 text-purple-500 border-purple-500/20">
+                        Edge Detection: ON
+                      </Badge>
                     </div>
-                  )}
-               </div>
+                  </div>
+                )}
+              </div>
 
-              <div className="flex flex-1 overflow-hidden">
-                <div className="flex-1 p-6 overflow-hidden relative">
-                  <ImageViewer 
-                    realImage={realPreview} 
-                    cadImage={cadPreview} 
+              <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
+                <div className="flex-1 p-3 md:p-6 overflow-hidden relative">
+                  <ImageViewer
+                    realImage={realPreview}
+                    cadImage={cadPreview}
                     title={realImage?.name || "Inspection View"}
                     mode={analysisMode}
+                    parts={parts}
+                    hoveredPartId={hoveredPartId}
+                    onHoverPart={setHoveredPartId}
                   />
-                  
+
                   {/* Problem 2: Algorithm Overlay Visualization */}
                   {analysisMode === 'dimensional' && (
                     <div className="absolute top-8 right-8 bg-black/80 backdrop-blur text-white p-4 rounded-lg border border-white/10 w-64 shadow-2xl z-20">
                       <div className="flex items-center gap-2 mb-3 border-b border-white/10 pb-2">
                         <ScanLine className="w-4 h-4 text-purple-400" />
-                        <span className="font-semibold text-xs tracking-wider">6-DoF PIPELINE</span>
+                        <span className="font-semibold text-xs tracking-wider">ANALYSIS PIPELINE</span>
                       </div>
                       <ul className="space-y-2 text-[10px] font-mono text-white/70">
                         <li className="flex justify-between items-center">
-                          <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"/>Feature Extraction</span>
-                          <span className="text-green-400 font-bold">DONE</span>
+                          <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-blue-500" />ORB Features</span>
+                          <span className="text-green-400 font-bold">EXTRACTED</span>
                         </li>
                         <li className="flex justify-between items-center">
-                          <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"/>Proj. Transformation</span>
-                          <span className="text-green-400 font-bold">MATCHED</span>
+                          <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-blue-500" />SSIM Analysis</span>
+                          <span className="text-green-400 font-bold">COMPLETE</span>
                         </li>
                         <li className="flex justify-between items-center">
-                          <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"/>Dim. Verification</span>
-                          <span className="text-green-400 font-bold">CALC</span>
+                          <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-blue-500" />Edge Detection</span>
+                          <span className="text-green-400 font-bold">ACTIVE</span>
                         </li>
-                         <li className="flex justify-between items-center">
-                          <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"/>Thresholding</span>
+                        <li className="flex justify-between items-center">
+                          <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-blue-500" />Variance Check</span>
                           <span className="text-yellow-400 font-bold">RUNNING</span>
                         </li>
                       </ul>
                       <div className="mt-3 pt-2 border-t border-white/10 text-[9px] text-white/50 font-mono text-center">
-                        Method: Canny Edge + PnP Solver
+                        Method: Canny + ORB + SSIM
                       </div>
                     </div>
                   )}
                 </div>
-                <div className="h-full border-l border-border bg-card">
-                  <PartsList parts={parts} mode={analysisMode} />
+                <div className="h-full md:border-l border-border bg-card">
+                  <PartsList
+                    parts={parts}
+                    mode={analysisMode}
+                    hoveredPartId={hoveredPartId}
+                    onHoverPart={setHoveredPartId}
+                  />
                 </div>
               </div>
             </div>
           )}
 
         </div>
+
+        {/* Live Analysis Overlay */}
+        <LiveAnalysisOverlay
+          isVisible={showLiveOverlay}
+          currentStep={liveStep}
+          currentMessage={liveMessage}
+        />
       </div>
     </DashboardLayout>
   );
@@ -425,17 +507,17 @@ function UploadCard({ label, accept, icon: Icon, file, onChange }: any) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   return (
-    <Card 
+    <Card
       className={`border-dashed transition-all cursor-pointer hover:bg-muted/30 ${file ? 'border-primary bg-primary/5' : 'border-border'}`}
       onClick={() => inputRef.current?.click()}
     >
       <CardContent className="flex flex-col items-center justify-center p-6 h-32">
-        <input 
-          type="file" 
-          ref={inputRef} 
-          className="hidden" 
-          accept={accept} 
-          onChange={onChange} 
+        <input
+          type="file"
+          ref={inputRef}
+          className="hidden"
+          accept={accept}
+          onChange={onChange}
         />
         {file ? (
           <div className="text-center animate-in zoom-in-50">
@@ -457,5 +539,3 @@ function UploadCard({ label, accept, icon: Icon, file, onChange }: any) {
   );
 }
 
-// Icon component import helper
-import { Layers } from "lucide-react";
